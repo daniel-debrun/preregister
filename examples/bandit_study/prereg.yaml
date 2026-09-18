@@ -1,0 +1,92 @@
+study: bandit-algorithms
+description: >
+  Epsilon-greedy (epsilon = 0.1), UCB1, and Thompson sampling on a fixed 10-armed
+  Bernoulli bandit (best arm 0.50, runner-up 0.45) over 2000 steps. Seeds control
+  both the algorithm's randomness and the reward draws. Standard deviations in the
+  power gates come from pilot.py (seeds 1000-1079, never linked).
+
+conditions:
+  eps_greedy:
+    role: control
+    config: {algo: eps_greedy, epsilon: 0.1, horizon: 2000}
+    description: epsilon-greedy with a constant epsilon of 0.1
+  ucb:
+    role: treatment
+    config: {algo: ucb1, c: 2.0, horizon: 2000}
+  thompson:
+    role: treatment
+    config: {algo: thompson, prior: [1.0, 1.0], horizon: 2000}
+
+metrics:
+  cumulative_regret:
+    version: "1"
+    higher_is_better: false
+    description: pseudo-regret summed over all 2000 steps
+  optimal_arm_rate:
+    version: "1"
+    higher_is_better: true
+    description: fraction of the last 500 steps spent on the best arm
+
+exclusions:
+  - rule: "status != finished"
+    reason: run did not complete
+
+predictions:
+  - id: P1
+    hypothesis: Thompson sampling accumulates at least 20 less regret than UCB1.
+    metric: cumulative_regret
+    comparison: "thompson - ucb < -20"
+    min_effect: 25
+    stopping_rule: exactly 20 seeds (0-19) per condition; no early stopping
+    analysis: {test: bootstrap, aggregation: iqm, alpha: 0.05, n_seeds: 20, correction: holm, family: regret}
+    gates:
+      - {type: MinSeeds, n: 10}
+      - {type: PowerAnalysis, sd_by_condition: {thompson: 29.0, ucb: 6.0}, power: 0.8}
+
+  - id: P2
+    hypothesis: UCB1 accumulates less regret than epsilon-greedy at this horizon.
+    metric: cumulative_regret
+    comparison: "ucb - eps_greedy < 0"
+    min_effect: 40
+    stopping_rule: exactly 20 seeds (0-19) per condition; no early stopping
+    analysis: {test: welch, aggregation: mean, alpha: 0.05, n_seeds: 20, correction: holm, family: regret}
+    gates:
+      - {type: MinSeeds, n: 10}
+      - {type: ControlPresent}
+      - {type: PowerAnalysis, sd_by_condition: {ucb: 6.0, eps_greedy: 55.0}, power: 0.8}
+
+  - id: P3
+    hypothesis: Thompson sampling accumulates less regret than epsilon-greedy.
+    metric: cumulative_regret
+    comparison: "thompson - eps_greedy < 0"
+    min_effect: 45
+    stopping_rule: exactly 20 seeds (0-19) per condition; no early stopping
+    notes: Powered for a 45-unit difference; the pilot suggests the true difference is much smaller.
+    analysis: {test: bootstrap, aggregation: mean, alpha: 0.05, n_seeds: 20, correction: holm, family: regret}
+    gates:
+      - {type: MinSeeds, n: 10}
+      - {type: ControlPresent}
+      - {type: PowerAnalysis, sd_by_condition: {thompson: 29.0, eps_greedy: 55.0}, power: 0.8}
+
+  - id: P4
+    hypothesis: >
+      Quick check on 5 seeds: Thompson sampling spends at least 10 percentage points
+      more of the late phase on the best arm than epsilon-greedy.
+    metric: optimal_arm_rate
+    comparison: "thompson - eps_greedy > 0.1"
+    min_effect: 0.1
+    stopping_rule: 5 seeds (0-4)
+    analysis: {test: mann_whitney, aggregation: median, alpha: 0.05, n_seeds: 5}
+    gates:
+      - {type: MinSeeds, n: 3}
+      - {type: PowerAnalysis, sd_by_condition: {thompson: 0.28, eps_greedy: 0.47}, power: 0.8}
+
+exploratory:
+  - id: E1
+    metric: optimal_arm_rate
+    comparison: "thompson - eps_greedy > 0"
+    aggregation: median
+  - id: E2
+    metric: cumulative_regret
+    comparison: "ucb / thompson > 1"
+    aggregation: iqm

@@ -1,0 +1,35 @@
+study: kitchen-coordination
+description: >
+  Does a communication channel help two agents coordinate in a cooking gridworld?
+  The custom RecipesCompletable gate checks each layout before any run is linked.
+
+conditions:
+  open_no_comm: {role: control, config: {layout: open_kitchen, comm: false, recipes: [onion_soup, tomato_soup]}}
+  open_comm: {role: treatment, config: {layout: open_kitchen, comm: true, recipes: [onion_soup, tomato_soup]}}
+  split_no_comm: {role: control, config: {layout: split_kitchen, comm: false, recipes: [onion_soup, tomato_soup]}}
+  split_comm: {role: treatment, config: {layout: split_kitchen, comm: true, recipes: [onion_soup, tomato_soup]}}
+
+metrics:
+  deliveries:
+    version: "2"
+    description: soups delivered per 400-step episode, averaged over 50 evaluation episodes
+
+predictions:
+  - id: OPEN
+    hypothesis: Communication increases deliveries on the open layout.
+    metric: deliveries
+    comparison: "open_comm - open_no_comm > 0"
+    min_effect: 1.0
+    analysis: {test: welch, n_seeds: 10}
+    gates:
+      - {type: ControlPresent}
+      - {type: RecipesCompletable}
+  - id: SPLIT
+    hypothesis: Communication increases deliveries on the split layout.
+    metric: deliveries
+    comparison: "split_comm - split_no_comm > 0"
+    min_effect: 1.0
+    analysis: {test: welch, n_seeds: 10}
+    gates:
+      - {type: ControlPresent}
+      - {type: RecipesCompletable}
